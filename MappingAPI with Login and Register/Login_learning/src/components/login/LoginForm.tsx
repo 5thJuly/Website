@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Eye, EyeOff, Mail, Lock, User, Sparkles } from 'lucide-react';
+import  authService  from '../../services/authService';
+import type { LoginData } from '../../services/authService'
 
 interface LoginFormData {
   email: string;
@@ -9,9 +11,13 @@ interface LoginFormData {
 interface FormErrors {
   email?: string;
   password?: string;
+  general?: string;
 }
 
-const LoginForm: React.FC<{ onSwitchToSignup: () => void }> = ({onSwitchToSignup}) => {
+const LoginForm: React.FC<{ onSwitchToSignup: () => void; onLoginSuccess?: () => void }> = ({
+  onSwitchToSignup,
+  onLoginSuccess
+}) => {
   const [formData, setFormData] = useState<LoginFormData>({
     email: '',
     password: ''
@@ -64,6 +70,14 @@ const LoginForm: React.FC<{ onSwitchToSignup: () => void }> = ({onSwitchToSignup
         [name]: undefined
       }));
     }
+    
+    // Clear general error when user starts typing
+    if (errors.general) {
+      setErrors(prev => ({
+        ...prev,
+        general: undefined
+      }));
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -76,13 +90,41 @@ const LoginForm: React.FC<{ onSwitchToSignup: () => void }> = ({onSwitchToSignup
     }
 
     setIsLoading(true);
+    setErrors({});
 
-    // Simulate API call
-    setTimeout(() => {
-      console.log('Login attempted with:', formData);
+    try {
+      const loginData: LoginData = {
+        email: formData.email,
+        password: formData.password
+      };
+
+      const response = await authService.login(loginData);
+
+      if (response.success) {
+        console.log('Login successful:', response.data);
+        
+        // Call success callback if provided
+        if (onLoginSuccess) {
+          onLoginSuccess();
+        } else {
+          alert('Login successful!');
+        }
+        
+        // Optionally redirect or update UI state here
+        // window.location.href = '/dashboard';
+      } else {
+        setErrors({
+          general: response.message || 'Login failed. Please try again.'
+        });
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      setErrors({
+        general: 'Network error. Please check your connection and try again.'
+      });
+    } finally {
       setIsLoading(false);
-      alert('Login successful! (This is just a demo)');
-    }, 2000);
+    }
   };
 
   return (
@@ -96,7 +138,7 @@ const LoginForm: React.FC<{ onSwitchToSignup: () => void }> = ({onSwitchToSignup
 
       {/* Floating particles - Reduced for mobile */}
       <div className="absolute inset-0 pointer-events-none">
-        {[...Array(window.innerWidth > 768 ? 20 : 10)].map((_, i) => (
+        {[...Array(typeof window !== 'undefined' && window.innerWidth > 768 ? 20 : 10)].map((_, i) => (
           <div
             key={i}
             className="absolute animate-bounce"
@@ -116,8 +158,8 @@ const LoginForm: React.FC<{ onSwitchToSignup: () => void }> = ({onSwitchToSignup
       <div
         className="hidden md:block fixed w-64 h-64 lg:w-96 lg:h-96 bg-gradient-to-r from-white/5 via-white/10 to-white/5 rounded-full pointer-events-none transition-all duration-1000 ease-out"
         style={{
-          left: mousePosition.x - (window.innerWidth >= 1024 ? 192 : 128),
-          top: mousePosition.y - (window.innerWidth >= 1024 ? 192 : 128),
+          left: mousePosition.x - (typeof window !== 'undefined' && window.innerWidth >= 1024 ? 192 : 128),
+          top: mousePosition.y - (typeof window !== 'undefined' && window.innerWidth >= 1024 ? 192 : 128),
           transform: `scale(${isHovered ? 1.2 : 1})`,
           background: `radial-gradient(circle, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 50%, transparent 100%)`
         }}
@@ -129,9 +171,7 @@ const LoginForm: React.FC<{ onSwitchToSignup: () => void }> = ({onSwitchToSignup
         onMouseLeave={() => setIsHovered(false)}
       >
         {/* Login Card */}
-        <div
-            className={`bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl sm:rounded-3xl p-6 sm:p-8 lg:p-10 shadow-2xl transform transition-all duration-700 hover:scale-105 hover:bg-white/15 animate-slide-in-left`}
-        >
+        <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl sm:rounded-3xl p-6 sm:p-8 lg:p-10 shadow-2xl transform transition-all duration-700 hover:scale-105 hover:bg-white/15">
           {/* Header */}
           <div className="text-center mb-6 sm:mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full mb-3 sm:mb-4 transform transition-all duration-500 hover:rotate-12">
@@ -142,6 +182,13 @@ const LoginForm: React.FC<{ onSwitchToSignup: () => void }> = ({onSwitchToSignup
             </h1>
             <p className="text-purple-200 text-sm sm:text-base">Sign in to your account</p>
           </div>
+
+          {/* General Error Message */}
+          {errors.general && (
+            <div className="mb-4 p-3 bg-red-500/20 border border-red-500/30 rounded-lg">
+              <p className="text-red-300 text-sm text-center">{errors.general}</p>
+            </div>
+          )}
 
           {/* Form Container */}
           <div className="space-y-4 sm:space-y-6">
@@ -159,7 +206,8 @@ const LoginForm: React.FC<{ onSwitchToSignup: () => void }> = ({onSwitchToSignup
                   name="email"
                   value={formData.email}
                   onChange={handleInputChange}
-                  className="w-full pl-9 sm:pl-10 pr-4 py-2.5 sm:py-3 text-sm sm:text-base bg-white/5 border border-white/20 rounded-xl text-white placeholder-purple-300 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-300 hover:bg-white/10"
+                  disabled={isLoading}
+                  className="w-full pl-9 sm:pl-10 pr-4 py-2.5 sm:py-3 text-sm sm:text-base bg-white/5 border border-white/20 rounded-xl text-white placeholder-purple-300 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-300 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
                   placeholder="Enter your email"
                 />
               </div>
@@ -182,13 +230,15 @@ const LoginForm: React.FC<{ onSwitchToSignup: () => void }> = ({onSwitchToSignup
                   name="password"
                   value={formData.password}
                   onChange={handleInputChange}
-                  className="w-full pl-9 sm:pl-10 pr-10 sm:pr-12 py-2.5 sm:py-3 text-sm sm:text-base bg-white/5 border border-white/20 rounded-xl text-white placeholder-purple-300 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-300 hover:bg-white/10"
+                  disabled={isLoading}
+                  className="w-full pl-9 sm:pl-10 pr-10 sm:pr-12 py-2.5 sm:py-3 text-sm sm:text-base bg-white/5 border border-white/20 rounded-xl text-white placeholder-purple-300 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-300 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
                   placeholder="Enter your password"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center hover:bg-white/10 rounded-r-xl transition-colors duration-200"
+                  disabled={isLoading}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center hover:bg-white/10 rounded-r-xl transition-colors duration-200 disabled:opacity-50"
                 >
                   {showPassword ? (
                     <EyeOff className="h-4 w-4 sm:h-5 sm:w-5 text-purple-300 hover:text-white" />
@@ -207,13 +257,18 @@ const LoginForm: React.FC<{ onSwitchToSignup: () => void }> = ({onSwitchToSignup
               <label className="flex items-center space-x-2 cursor-pointer group">
                 <input
                   type="checkbox"
-                  className="w-3 h-3 sm:w-4 sm:h-4 bg-white/10 border border-white/20 rounded focus:ring-purple-500 text-purple-500 transition-all duration-200"
+                  disabled={isLoading}
+                  className="w-3 h-3 sm:w-4 sm:h-4 bg-white/10 border border-white/20 rounded focus:ring-purple-500 text-purple-500 transition-all duration-200 disabled:opacity-50"
                 />
                 <span className="text-purple-200 group-hover:text-white transition-colors duration-200">
                   Remember me
                 </span>
               </label>
-              <button className="text-purple-300 hover:text-pink-300 transition-colors duration-200 hover:underline">
+              <button 
+                type="button"
+                disabled={isLoading}
+                className="text-purple-300 hover:text-pink-300 transition-colors duration-200 hover:underline disabled:opacity-50"
+              >
                 Forgot password?
               </button>
             </div>
@@ -245,7 +300,11 @@ const LoginForm: React.FC<{ onSwitchToSignup: () => void }> = ({onSwitchToSignup
 
           {/* Social Login */}
           <div className="space-y-3">
-            <button className="w-full py-2.5 sm:py-3 px-4 text-sm sm:text-base bg-white/5 hover:bg-white/10 border border-white/20 rounded-xl text-white font-medium transition-all duration-300 hover:scale-105 flex items-center justify-center space-x-2">
+            <button 
+              type="button"
+              disabled={isLoading}
+              className="w-full py-2.5 sm:py-3 px-4 text-sm sm:text-base bg-white/5 hover:bg-white/10 border border-white/20 rounded-xl text-white font-medium transition-all duration-300 hover:scale-105 flex items-center justify-center space-x-2 disabled:opacity-50 disabled:hover:scale-100"
+            >
               <svg className="w-4 h-4 sm:w-5 sm:h-5" viewBox="0 0 24 24">
                 <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                 <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
@@ -260,8 +319,12 @@ const LoginForm: React.FC<{ onSwitchToSignup: () => void }> = ({onSwitchToSignup
           {/* Sign up link */}
           <p className="text-center text-xs sm:text-sm text-purple-200 mt-4 sm:mt-6">
             Don't have an account?{' '}
-            <button onClick={onSwitchToSignup}
-                    className="text-pink-300 hover:text-pink-200 font-medium transition-colors duration-200 hover:underline">
+            <button 
+              type="button"
+              onClick={onSwitchToSignup}
+              disabled={isLoading}
+              className="text-pink-300 hover:text-pink-200 font-medium transition-colors duration-200 hover:underline disabled:opacity-50"
+            >
               Sign up here
             </button>
           </p>
